@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.3/dist/leaflet.css"/>
+    <style>
+        #map {
+            bottom: 0;
+            left: 150px;
+            /*position: absolute;*/
+            right: 0;
+            top: 0;
+            width: 650px;
+            height: 500px;
+            padding-left: 20px;
+        }
+        .legend div {
+            float: left;
+            width: 30px;
+            height: 25px;
+            margin: 5px;
+        }
+        .states {
+            fill: none;
+            stroke: #fff;
+            stroke-linejoin: round;
+        }
+        .float-container {
+
+            padding: 10px;
+            margin: 10px;
+        }
+        .float-child {
+            float: center;
+            width: 30%;
+            padding: 10px;
+
+
+        }
+        .float-container::after {
+            content: "";
+            clear: both;
+            display: inline;
+        }
+        h2 {
+            text-align: center;
+            font-family: 'Roboto', sans-serif;
+
+        }
+        text {
+            fontfont-family: 'Roboto', sans-serif;
+            font-size: 14px;
+        }
+        span {
+            font-family: 'Roboto', sans-serif;
+            font-size: 10px;
+        }
+    </style>
+    <script src="//d3js.org/queue.v1.min.js"></script>
+    <script src="https://d3js.org/topojson.v2.min.js"></script>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    
+
+    <script src="https://unpkg.com/leaflet@1.0.3/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/georaster"></script>
+    <script src="https://unpkg.com/chroma-js"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+</head>
+<body>
+<div class="float-container">
+    <div class="float-child"><h2>Lithium in drinking water (micrograms/Liter)</h2>
+        <div id="map"></div>
+    </div>
+
+    <div class="float-child"><h2>Suicide % per 100k by County</h2>
+        <div id="chart"></div><div><script src="chart.js"></script></div>
+    </div>
+
+<!--<div id="map"></div>-->
+
+<!--<div id="chart"></div><span>test</span>-->
+
+<div>
+<script>
+
+    // initalize leaflet map
+    var map = L.map('map').setView([0, 0], 6);
+    //     map.dragging.disable()
+    //     map.touchZoom.disable()
+    //     map.doubleClickZoom.disable()
+    //     map.scrollWheelZoom.disable()
+    //     map.boxZoom.disable()
+    //     map.keyboard.disable()
+    // map.fitBounds(maxBounds);
+
+
+
+    // add OpenStreetMap basemap
+    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // var maxBounds = L.latLngBounds(
+    //     L.latLng(5.499550, -167.276413),
+    //     L.latLng(83.162102, -52.233040)
+    // );
+    //
+    // map.setMaxBounds(maxBounds);
+    // map.fitBounds(maxBounds);
+    // originally from https://globalwindatlas.info/downloads/gis-files
+    var url_to_geotiff_file = "Lithium_Y_mean_c.tif";
+
+    fetch(url_to_geotiff_file)
+        .then(response => response.arrayBuffer())
+        .then(arrayBuffer => {
+            parseGeoraster(arrayBuffer).then(georaster => {
+                const min = georaster.mins[0];
+                const max = georaster.maxs[0];
+                const range = georaster.ranges[0];
+
+                // available color scales can be found by running console.log(chroma.brewer);
+                console.log(chroma.brewer);
+                var scale = chroma.scale("Viridis");
+
+                var layer = new GeoRasterLayer({
+                    georaster: georaster,
+                    opacity: 0.5,
+                    pixelValuesToColorFn: function(pixelValues) {
+                        var pixelValue = pixelValues[0]; // there's just one band in this raster
+
+                        // if there's zero wind, don't return a color
+                        if (pixelValue === 0) return null;
+
+                        // scale to 0 - 1 used by chroma
+                        var scaledPixelValue = (pixelValue - min) / range;
+
+                        var color = scale(scaledPixelValue).hex();
+
+                        return color;
+                    },
+                    resolution: 512
+                });
+                console.log("layer:", layer);
+                layer.addTo(map);
+                map.fitBounds(layer.getBounds());
+               // add a legend
+                var legend = L.control({position: 'bottomright'});
+                legend.onAdd = function (map) {
+                    var div = L.DomUtil.create('div', 'info legend');
+                    // loop through our density intervals and generate a label with a colored square for each interval
+                    for (var i = 0; i < 10; i++) {
+                        div.innerHTML +=
+                            '<div style="background-color:' + scale(i/10).hex() + ';height:8px;width:8px"></div> ' +
+                            Math.round((min + i * range/10)) + '<br>';
+                        console.log("i:", scale(i/10).hex());
+
+                    }
+                    return div;
+                };
+                legend.addTo(map);
+            });
+
+
+
+        });
+</script>
+</div>
+</div>
+
+</body>
+<footer>
+<div class="float-container">
+    <div>
+        <p><b>Hypothesis:</b> There is a correlation between the concentration of lithium in drinking water and the rate of suicide in that location.
+        </p>
+        <p>
+            <b>Summation:</b> Using data from USGS about lithium concentration in groundwater I plotted the rastor files against a projection of the
+            United States using OpenStreetMaps. I then queried the CDC's database for a county level suicide death rate per hundred thousand people and
+            plotted that by its individual county. The darkest purple are missing data sets. From there I colored the two maps so that high lithium concentrations
+            and low suicide rates were highlighted on either map. The data is not very complete ,but it does look like a small correlation. This hypothesis was
+            based on a paper published in the National Library of Medicine in 2011. Their conclusion was that there was strong correlation between high lithium concentration
+            and low suicide rates. My data wasn't as strong due to the missing amount of suicide rates, though some areas do line up.
+        </p>
+    </div>
+</div>
+</footer>
+<span>Sources:</br> <a href="https://mrdata.usgs.gov/catalog/cite-view.php?cite=1742">Lithium Concentration</a></br>
+<a href="https://wonder.cdc.gov/controller/datarequest/D76;jsessionid=B9ED615DECE4D3D9DB40FD8BFE17">CDC suicide statistics</a></br>
+    <a href="https://pubmed.ncbi.nlm.nih.gov/21525518/">Further Reading and inspiration on this topic</a></br>
+    Annotated Assignment:</br><a href="AnnotatedAssignment2.pdf">Link</a>
+</span>
+</html>
